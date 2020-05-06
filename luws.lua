@@ -10,7 +10,7 @@
 
 module("luws", package.seeall)
 
-_VERSION = 20122
+_VERSION = 20127
 
 debug_mode = false
 
@@ -18,24 +18,24 @@ local math = require "math"
 local string = require "string"
 local socket = require "socket"
 local bit = require "bit"
-local ltn12 = require "ltn12"
+-- local ltn12 = require "ltn12"
 
-local WSGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+-- local WSGUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 local STATE_START = "start"
 local STATE_READLEN1 = "len"
 local STATE_READLEN161 = "len16-1"
 local STATE_READLEN162 = "len16-2"
 local STATE_READDATA = "data"
 local STATE_SYNC = "sync"
-local STATE_RESYNC1 = "resync1"
-local STATE_RESYNC2 = "resync2"
+-- local STATE_RESYNC1 = "resync1"
+-- local STATE_RESYNC2 = "resync2"
 local STATE_READMASK = "mask"
 local MAXMESSAGE = 65535 -- maximum WS message size
 local CHUNKSIZE = 2048
 local DEFAULTMSGTIMEOUT = 0 -- drop connection if no message in this time (0=no timeout)
 
 local timenow = socket.gettime or os.time -- use hi-res time if available
-local unpack = unpack or table.unpack
+local unpack = unpack or table.unpack -- luacheck: ignore 143
 local LOG = luup.log or ( function(msg,level) print(level or 50,msg) end )
 
 function dump(t, seen)
@@ -124,7 +124,7 @@ local function wsupgrade( wsconn )
 	wsconn.socket:settimeout( 5, "r" )
 	local nb,err = wsconn.socket:send( req )
 	if nb == nil then
-		return false, "Failed to send upgrade request"
+		return false, "Failed to send upgrade request: "..tostring(err)
 	end
 
 	-- Read until we get two consecutive linefeeds.
@@ -161,7 +161,7 @@ local function wsupgrade( wsconn )
 	return false, "upgrade failed; "..tostring(buf[1])
 end
 
-local function connect( ip, port, options )
+local function connect( ip, port )
 	local sock = socket.tcp()
 	if not sock then
 		return nil, "Can't get socket for connection"
@@ -211,9 +211,8 @@ function wsopen( url, handler, options )
 
 	-- This call is async -- it returns immediately.
 	--??? options.create? for extensible socket creation?
-	local sock,err = options.connect( ip, port, options )
+	local sock,err = options.connect( ip, port )
 	if not sock then
-		wsconn = nil
 		return false, err
 	end
 	wsconn.socket = sock
@@ -250,11 +249,11 @@ function wsopen( url, handler, options )
 	end
 	wsconn.socket:close()
 	wsconn.socket = nil
-	wsconn = nil
 	return false, err
 end
 
 local function send_frame( wsconn, opcode, fin, s )
+	D("send_frame(%1,%2,%3,<%4 bytes>)", wsconn, opcode, fin, #s)
 	local mask = wsconn.options.use_masking
 	local t = {}
 	local b = bit.bor( fin and 0x80 or 0, opcode )
@@ -287,7 +286,7 @@ local function send_frame( wsconn, opcode, fin, s )
 		-- No masking, just concatenate string as we got it (not RFC for client).
 		frame = table.concat( t, "" ) .. s
 	end
-	t = nil
+	t = nil -- luacheck: ignore 311
 	D("send_frame() sending frame of %1 bytes for %2", #frame, s)
 	wsconn.socket:settimeout( 5, "b" )
 	wsconn.socket:settimeout( 5, "r" )
@@ -549,7 +548,7 @@ end
 -- Receiver task. Use non-blocking read. Returns nil,err on error, otherwise true/false is the
 -- receiver believes there may immediately be more data to process.
 function wsreceive( wsconn )
-	-- D("wsreceive(%1)", wsconn)
+	D("wsreceive(%1)", wsconn)
 	if not wsconn.connected then return end
 	wsconn.socket:settimeout( 0, "b" )
 	wsconn.socket:settimeout( 0, "r" )
@@ -582,6 +581,7 @@ end
 
 -- Reset receiver state. Brutal resync; may or may be usable, but worth having the option.
 function wsreset( wsconn )
+	D("wsreset(%1)", wsconn)
 	if wsconn then
 		wsconn.msg = nil -- gc eligible
 		wsconn.frag = nil -- gc eligible
