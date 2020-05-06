@@ -91,7 +91,7 @@ For step one, here's a replacement `connect` function:
 ```
 -- Attempt proxy connection first, fallback to regular
 local usingProxy = false -- declare global so other parts of our plugin know if proxy in use or not
-function connect_sockproxy( ip, port, options )
+function connect_sockproxy( ip, port )
     local sock = socket.tcp()
     if not sock then
         return nil, "Can't get socket for connection"
