@@ -32,9 +32,9 @@ local luws = require "L_MyPluginName_LuWS"
 
 local conn, err = luws.wsopen( "wss://www.websocket.org/echo", message_handler, options )
 if not conn then
-	luup.log("The connection failed: " .. err)
+    luup.log("The connection failed: " .. err)
 else
-	luup.log("Successful connection!")
+    luup.log("Successful connection!")
 end
 ```
 
@@ -62,10 +62,10 @@ If the `opcode` received by your handler is *false* (boolean), then an error has
 
 There are a few options you can define when calling `wsopen()` to control the behavior of LuWS' handling of connections and data. Generally, you won't need to supply any options, the defaults are usually acceptable.
 
-* `handler_args`: a Lua table containing additional arguments that should be passed to your message handler when it is called, default: none;
+* `handler_args`: a Lua table (array) containing additional arguments that should be passed to your message handler when it is called, default: none;
 * `receive_timeout`: if no messages are received from the endpoint in this many seconds, the connection is assumed to have died somehow and will cause an error notification to the message handler (0=default, no timeout is enforced).
-* `receive_chunk_size`: maximum size of a socket read; it is usually not necessary to modify this, but some older Vera systems with little RAM may benefit from a size smaller than the default 2048.
-* `max_payload_size`: maximum size of a message that can be received and passed to the handler; longer messages generate an error notification to the handler. The default is 64K bytes. Note that this is the total size of the message, not the maximum size of a fragment (several fragments assemble into one message). Fragments are always limited to 65535 bytes in the current implementation, but the `max_payload_size` can be set much larger.
+* `receive_chunk_size`: maximum size (in bytes) of a socket read; it is usually not necessary to modify this, but some older Vera systems with little RAM may benefit from a size smaller than the default 2048.
+* `max_payload_size`: maximum size (in bytes) of a message that can be received and passed to the handler; longer messages generate an error notification to the handler. The default is 64K bytes. Note that this is the total size of the message, not the maximum size of a fragment (several fragments assemble into one message). Fragments are always limited to 65535 bytes in the current implementation, but the `max_payload_size` can be set much larger.
 * `ssl_protocol`: LuaSec `protocol` option value for SSL/TLS connections, default `all` (systems using older versions of LuaSec may not be able to use `all` and should use `tlsv1_2`);
 * `ssl_verify`: LuaSec `verify` option value for SSL/TLS connections, default `none` (**Nota Bene!** this turns off peer certificate validation and is thus less secure, but is necessary for connecting to systems with self-signed certificates. If you are connecting to a system with valid certificates, it is strongly recommended that you set this to `peer`);
 * `ssl_mode`: LuaSec `mode` option value for SSL/TLS connections, default `client`;
@@ -78,7 +78,7 @@ The full details of the SSL option values can be found in the LuaSec documentati
 
 ## Using LuWS with SockProxy
 
-To use SockProxy's asynchronous receive capabilities with LuWS, you need to modify your program/plugin as follows:
+To use [SockProxy](https://github.com/toggledbits/sockproxyd)'s asynchronous receive capabilities with LuWS, you need to modify your program/plugin as follows:
 
 1. Provide an override `connect` function (in `options` for `wsopen()`) that attempts to open the connection to SockProxy first;
 2. Provide an action declaration in your plugin's service for SockProxy to use to notify you that pending receive data is waiting;
@@ -92,38 +92,38 @@ For step one, here's a replacement `connect` function:
 -- Attempt proxy connection first, fallback to regular
 local usingProxy = false -- declare global so other parts of our plugin know if proxy in use or not
 function connect_sockproxy( ip, port, options )
-	local sock = socket.tcp()
-	if not sock then
-		return nil, "Can't get socket for connection"
-	end
-	-- Try SockProxy plugin first
-	sock:settimeout( 5 )
-	local st,se = sock:connect( "127.0.0.1", 2504 )
-	if st then
-		local ans,ae = sock:receive("*l")
-		if ans and ans:match("^OK TOGGLEDBITS%-SOCKPROXY") then
-			sock:send( string.format("CONN %s:%d NTFY=%d/%s/%s RTIM=0 PACE=0\n",
-				ip, port, NOTIFY_DEVICE, NOTIFY_SERVICE, NOTIFY_ACTION ) )
-			ans,ae = sock:receive("*l")
-			if ans and ans:match("^OK CONN") then
-				-- Successful proxy connection! Return socket to LuWS
-				usingProxy = true
-				return sock
-			end
-		end
-		-- Proxy negotiation failed; fallback to plain connect.
-		sock:shutdown("both")
-	end
-	-- No good. Close socket, make a new one.
-	luup.log("SockProxy connection attempt failed, using plain socket")
-	sock:settimeout( 15 )
-	local r, e = sock:connect( ip, port )
-	if r then
-		usingProxy = false
-		return sock
-	end
-	sock:close()
-	return nil, string.format("Connection to %s:%s failed: %s", ip, port, tostring(e))
+    local sock = socket.tcp()
+    if not sock then
+        return nil, "Can't get socket for connection"
+    end
+    -- Try SockProxy plugin first
+    sock:settimeout( 5 )
+    local st,se = sock:connect( "127.0.0.1", 2504 )
+    if st then
+        local ans,ae = sock:receive("*l")
+        if ans and ans:match("^OK TOGGLEDBITS%-SOCKPROXY") then
+            sock:send( string.format("CONN %s:%d NTFY=%d/%s/%s RTIM=0 PACE=0\n",
+                ip, port, NOTIFY_DEVICE, NOTIFY_SERVICE, NOTIFY_ACTION ) )
+            ans,ae = sock:receive("*l")
+            if ans and ans:match("^OK CONN") then
+                -- Successful proxy connection! Return socket to LuWS
+                usingProxy = true
+                return sock
+            end
+        end
+        -- Proxy negotiation failed; fallback to plain connect.
+        sock:shutdown("both")
+    end
+    -- No good. Close socket, make a new one.
+    luup.log("SockProxy connection attempt failed, using plain socket")
+    sock:settimeout( 15 )
+    local r, e = sock:connect( ip, port )
+    if r then
+        usingProxy = false
+        return sock
+    end
+    sock:close()
+    return nil, string.format("Connection to %s:%s failed: %s", ip, port, tostring(e))
 end
 ```
 
@@ -141,35 +141,35 @@ local conn, err = luws.wsopen( url, message_handler, { connect=connect_sockproxy
 Step two, declaring the action that SockProxy should use to notify your plugin when data is waiting, is simple. Add this block to the `<actionList>` section of your plugin's primary/own service (`S_.xml`) file:
 
 ```
-	<action>
-		<name>HandleReceive</name>
-		<argumentList>
-			<argument>
-				<name>Pid</name>
-				<direction>in</direction>
-			</argument>
-		</argumentList>
-	</action>
+    <action>
+        <name>HandleReceive</name>
+        <argumentList>
+            <argument>
+                <name>Pid</name>
+                <direction>in</direction>
+            </argument>
+        </argumentList>
+    </action>
 ```
 
 Step three, add the implementation for this new action:
 
 ```
-	<action>
-		<serviceId>...your plugin's service Id...</serviceId>
-		<name>HandleReceive</name>
-		<job>
-			return LoboPlugin.actionHandleReceive( lul_device, lul_settings )
-		</job>
-	</action>
+    <action>
+        <serviceId>...your plugin's service Id...</serviceId>
+        <name>HandleReceive</name>
+        <job>
+            return LoboPlugin.actionHandleReceive( lul_device, lul_settings )
+        </job>
+    </action>
 ```
 
 The above form is what I use, but your preferred style may be different. When I write a plugin, I load the plugin's code as a module in my startup function (not using the `<files>` section of the `I_.xml` implementation file) and store it as a global variable (that's the `LoboPlugin` variable/table in the above example). In that module, I create a public (not `local`) function called `actionHandleReceive`, and all it needs to do is call `wsreceive()`:
 
 ```
 function actionHandleReceive( dev, params )
-	luws.wsreceive( conn ) -- luws and conn are assumed to be global here
-	return 4,0 -- required, return successful job completion
+    luws.wsreceive( conn ) -- luws and conn are assumed to be global here
+    return 4,0 -- required, return successful job completion
 end
 ```
 
@@ -226,7 +226,7 @@ This is an optional callback function that you can provide if you want to interc
 
 LuWS default handling for control messages is as follows:
 
-* If a *close* message (opcode 0x08) is received, and the session is as yet not known to be closing, it is marked as pending close and a *close* message is sent in reply. The message handler is also called with `opcode`=(boolean)*false* and `data`=(string)"receiver error: closed" to notify the app that the endpoint has requested that the connection be closed. It is up to the message handler/application to call `wsclose()` to finalize the closure and release of the session.
+* If a *close* message (opcode 0x08) is received, and the session is as yet not known to be closing, it is marked as pending close and a *close* message is sent in reply. The message handler is also called with `opcode`=(boolean)*false* and `data`=(string)"receiver error: closed" to notify the app that the endpoint has requested that the connection be closed. It is up to the message handler/application to call `wsclose()` to finalize the closure and release of the session. At this point, the app may receive any remaining data before calling `wsclose()`, but the RFC does not allow sending any additional messages.
 * In response to a received *ping* control message (opcode 0x09), LuWS will send a *pong* (opcode 0x0a);
 * All other opcodes are ignored.
 
