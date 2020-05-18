@@ -5,12 +5,17 @@
 	Ref: RFC6455
 
 	NOTA BENE: 64-bit payload length not supported.
+
+RB: 	fix for messages larger than 256 bytes.
+	fix for handling ping request
+	removed chat option from negotiate.
+
 --]]
 --luacheck: std lua51,module,read globals luup,ignore 542 611 612 614 111/_,no max line length
 
 module("luws", package.seeall)
 
-_VERSION = 20127
+_VERSION = 20128
 
 debug_mode = false
 
@@ -115,7 +120,10 @@ local function wsupgrade( wsconn )
 	for k=1,16 do key[k] = string.char( math.random( 0, 255 ) ) end
 	key = mime.b64( table.concat( key, "" ) )
 	-- Ref: https://stackoverflow.com/questions/18265128/what-is-sec-websocket-key-for
-	local req = string.format("GET %s HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: %s\r\nSec-WebSocket-Protocol: chat\r\nSec-WebSocket-Version: 13\r\n\r\n",
+--	local req = string.format("GET %s HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: %s\r\nSec-WebSocket-Protocol: chat\r\nSec-WebSocket-Version: 13\r\n\r\n",
+--		wsconn.path, wsconn.ip, key)
+-- removing chat protocol
+	local req = string.format("GET %s HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n\r\n",
 		wsconn.path, wsconn.ip, key)
 
 	-- Send request.
@@ -191,12 +199,17 @@ function wsopen( url, handler, options )
 		error("Invalid protocol/address for WebSocket open in " .. url)
 	end
 	port = proto == "wss" and 443 or 80
+	-- Check for socket number start
+	if ps:sub(1,1) == ":" then
+		ps = ps:sub(2)
+	end	
 	local p,path = ps:match("^(%d+)(.*)")
 	if p then
 		port = tonumber(p) or port
 	else
 		path = ps
 	end
+	if path == "" then path = "/" end
 
 	local wsconn = {}
 	wsconn.connected = false
@@ -396,6 +409,8 @@ local function wshandlefragment( fin, op, data, wsconn )
 		wsconn.lastMessage = timenow()
 		if op >= 8 then
 			handle_control_frame( wsconn, op, data )
+-- RB I think return is required here. Else we get completion error on incomming pong 			
+			return
 		elseif (wsconn.msg or "") == "" then
 			-- Control frame or FIN on first packet, handle immediately, no copy/buffering
 			D("wshandlefragment() fast dispatch %1 byte message for op %2", #data, op)
@@ -552,7 +567,8 @@ function wsreceive( wsconn )
 	if not wsconn.connected then return end
 	wsconn.socket:settimeout( 0, "b" )
 	wsconn.socket:settimeout( 0, "r" )
-	local nb,err,bb = wsconn.socket:receive( wsconn.receive_chunk_size ) -- fixed count to avoid stop at 0x00s
+--	local nb,err,bb = wsconn.socket:receive( wsconn.receive_chunk_size ) -- fixed count to avoid stop at 0x00s
+	local nb,err,bb = wsconn.socket:receive( wsconn.options.receive_chunk_size ) -- fixed count to avoid stop at 0x00s
 	if nb == nil then
 		if err == "timeout" or err == "wantread" then
 			if bb and #bb > 0 then
