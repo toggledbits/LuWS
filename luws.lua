@@ -15,7 +15,7 @@ RB: 	fix for messages larger than 256 bytes.
 
 module("luws", package.seeall)
 
-_VERSION = 20139
+_VERSION = 20140
 
 debug_mode = false
 
@@ -561,7 +561,11 @@ function wsreceive( wsconn )
 	if not wsconn.connected then return end
 	wsconn.socket:settimeout( 0, "b" )
 	wsconn.socket:settimeout( 0, "r" )
-	local nb,err,bb = wsconn.socket:receive( wsconn.options.receive_chunk_size ) -- fixed count to avoid stop at zero bytes
+	--[[ PHR 20140: Make sure we provide a number of bytes. Failing to do so apparently kicks-in the
+	                special handling of special characters, including 0 bytes, CR, LF, etc. We want
+	                the available data completely unmolested.
+	--]]
+	local nb,err,bb = wsconn.socket:receive( wsconn.options.receive_chunk_size or CHUNKSIZE )
 	if nb == nil then
 		if err == "timeout" or err == "wantread" then
 			if bb and #bb > 0 then
