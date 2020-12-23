@@ -10,7 +10,7 @@
 --]]
 --luacheck: std lua51,module,read globals luup,ignore 542 611 612 614 111/_,no max line length
 
-module("L_SockProxy_LuWS", package.seeall)
+module("luws", package.seeall)
 
 _VERSION = 20358
 
